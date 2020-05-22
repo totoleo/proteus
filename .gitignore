@@ -24,3 +24,5 @@ profile.out
 *.exe
 *.test
 *.prof
+/.idea
+/.idea/modules.xml

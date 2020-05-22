@@ -24,30 +24,27 @@ type Scanner struct {
 	importer *parseutil.Importer
 }
 
-// ErrNoGoPathSet is the error returned when the GOPATH variable is not
-// set.
-var ErrNoGoPathSet = errors.New("GOPATH environment variable is not set")
-
 // New creates a new Scanner that will look for types and structs
 // only in the given packages.
-func New(packages ...string) (*Scanner, error) {
-	if goPath == "" {
-		return nil, ErrNoGoPathSet
-	}
-
+func New(module, base string, packages ...string) (*Scanner, error) {
 	for _, pkg := range packages {
-		p := filepath.Join(goPath, "src", pkg)
-		fi, err := os.Stat(p)
+		pkg := filepath.Join(base, pkg)
+		fmt.Println(pkg)
+		fi, err := os.Stat(pkg)
 		switch {
 		case err != nil:
-			return nil, err
+			return nil, fmt.Errorf("scanner err:%w", err)
 		case !fi.IsDir():
-			return nil, fmt.Errorf("path is not directory: %s", p)
+			return nil, fmt.Errorf("path is not directory: %s", pkg)
 		}
+	}
+	realPackages := packages[:0]
+	for _, pkg := range packages {
+		realPackages = append(realPackages, filepath.Join(module, pkg))
 	}
 
 	return &Scanner{
-		packages: packages,
+		packages: realPackages,
 		importer: parseutil.NewImporter(),
 	}, nil
 }

@@ -16,7 +16,9 @@ import (
 
 var (
 	packages cli.StringSlice
-	path     string
+	module   string
+	baseDir  string
+	output   string
 	verbose  bool
 )
 
@@ -27,6 +29,16 @@ func main() {
 	app.Version = "1.0.0"
 
 	baseFlags := []cli.Flag{
+		cli.StringFlag{
+			Name:        "module, m",
+			Usage:       "",
+			Destination: &module,
+		},
+		cli.StringFlag{
+			Name:        "base, b",
+			Usage:       "",
+			Destination: &baseDir,
+		},
 		cli.StringSliceFlag{
 			Name:  "pkg, p",
 			Usage: "Use `PACKAGE` as input for the generation. You can use this flag multiple times to specify more than one package.",
@@ -42,7 +54,7 @@ func main() {
 	folderFlag := cli.StringFlag{
 		Name:        "folder, f",
 		Usage:       "All generated .proto files will be written to `FOLDER`.",
-		Destination: &path,
+		Destination: &output,
 	}
 
 	app.Flags = append(baseFlags, folderFlag)
@@ -87,22 +99,24 @@ func initCmd(next action) func(c *cli.Context) error {
 }
 
 func genProtos(c *cli.Context) error {
-	if path == "" {
+	if output == "" {
 		return errors.New("destination path cannot be empty")
 	}
 
-	if err := checkFolder(path); err != nil {
+	if err := checkFolder(output); err != nil {
 		return err
 	}
 
 	return proteus.GenerateProtos(proteus.Options{
-		BasePath: path,
+		BaseDir:  baseDir,
+		Module:   module,
+		BasePath: output,
 		Packages: packages,
 	})
 }
 
 func genRPCServer(c *cli.Context) error {
-	return proteus.GenerateRPCServer(packages)
+	return proteus.GenerateRPCServer(module, baseDir, packages)
 }
 
 var (
@@ -116,28 +130,27 @@ func genAll(c *cli.Context) error {
 		return fmt.Errorf("protoc is not installed: %s", err)
 	}
 
-	if err := checkFolder(protobufSrc); err != nil {
-		return fmt.Errorf("github.com/gogo/protobuf is not installed")
-	}
+	//if err := checkFolder(protobufSrc); err != nil {
+	//	return fmt.Errorf("github.com/gogo/protobuf is not installed")
+	//}
 
 	if err := genProtos(c); err != nil {
 		return err
 	}
 
 	for _, p := range packages {
-		outPath := goSrc
-		proto := filepath.Join(path, p, "generated.proto")
+		proto := filepath.Join(output, p, "generated.proto")
 
-		if err := protocExec(protocPath, p, outPath, proto); err != nil {
+		if err := protocExec(protocPath, p, "", proto); err != nil {
 			return fmt.Errorf("error generating Go files from %q: %s", proto, err)
 		}
 
-		matches, err := filepath.Glob(filepath.Join(path, p, "*.pb.go"))
+		matches, err := filepath.Glob(filepath.Join(output, p, "*.pb.go"))
 		if err != nil {
 			return fmt.Errorf("error moving Go files")
 		}
 
-		moveToDir := filepath.Join(outPath, p)
+		moveToDir := filepath.Join("", p)
 		for _, s := range matches {
 			mv(s, moveToDir)
 		}
@@ -150,9 +163,9 @@ func protocExec(protocPath, pkg, outPath, protoFile string) error {
 	protocArgs := fmt.Sprintf(
 		"--proto_path=%s:%s:%s:%s:.",
 		goSrc,
-		path,
+		output,
 		filepath.Join(protobufSrc, "protobuf"),
-		filepath.Join(path, pkg),
+		filepath.Join(output, pkg),
 	)
 
 	report.Info("executing protoc: %s %s", protocPath, protocArgs)
@@ -194,7 +207,7 @@ func checkFolder(p string) error {
 	fi, err := os.Stat(p)
 	switch {
 	case os.IsNotExist(err):
-		return errors.New("folder does not exist, please create it first")
+		return fmt.Errorf("folder:%s does not exist, please create it first", p)
 	case err != nil:
 		return err
 	case !fi.IsDir():

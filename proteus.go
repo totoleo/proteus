@@ -9,19 +9,21 @@ import (
 
 // Options are all the available options to configure proto generation.
 type Options struct {
+	Module   string
+	BaseDir  string
 	BasePath string
 	Packages []string
 }
 
 type generator func(*scanner.Package, *protobuf.Package) error
 
-func transformToProtobuf(packages []string, generate generator) error {
-	scanner, err := scanner.New(packages...)
+func transformToProtobuf(module, base string, packages []string, generate generator) error {
+	sc, err := scanner.New(module, base, packages...)
 	if err != nil {
 		return err
 	}
 
-	pkgs, err := scanner.Scan()
+	pkgs, err := sc.Scan()
 	if err != nil {
 		return err
 	}
@@ -65,16 +67,16 @@ func createEnumTypeSet(pkgs []*scanner.Package) protobuf.TypeSet {
 // GenerateProtos generates proto files for the given options.
 func GenerateProtos(options Options) error {
 	g := protobuf.NewGenerator(options.BasePath)
-	return transformToProtobuf(options.Packages, func(_ *scanner.Package, pkg *protobuf.Package) error {
+	return transformToProtobuf(options.Module, options.BaseDir, options.Packages, func(_ *scanner.Package, pkg *protobuf.Package) error {
 		return g.Generate(pkg)
 	})
 }
 
 // GenerateRPCServer generates the gRPC server implementation of the given
 // packages.
-func GenerateRPCServer(packages []string) error {
+func GenerateRPCServer(module, base string, packages []string) error {
 	g := rpc.NewGenerator()
-	return transformToProtobuf(packages, func(p *scanner.Package, pkg *protobuf.Package) error {
+	return transformToProtobuf(module, base, packages, func(p *scanner.Package, pkg *protobuf.Package) error {
 		return g.Generate(pkg, p.Path)
 	})
 }
